@@ -822,7 +822,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnInputs = findViewById(R.id.btnInputs);
         View btnSettings = findViewById(R.id.btnSettings);
         btnInputs.setOnClickListener(v -> showInputs());
-        btnWifi.setOnClickListener(v -> openNetworkPill());
+        btnWifi.setOnClickListener(v -> showNetworkMenu());
         btnVpn.setOnClickListener(v -> openVpnPill());
         btnWifi.setOnLongClickListener(v -> {
             open(systemIntent(Settings.ACTION_WIFI_SETTINGS));
@@ -836,7 +836,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnSettings.setOnClickListener(v -> {
             if (launcherSettingsButton) startActivityForResult(
                     new Intent(this, LauncherSettingsActivity.class), LAUNCHER_SETTINGS_REQUEST);
-            else open(systemIntent(Settings.ACTION_SETTINGS));
+            else showQuickSettingsMenu();
         });
         btnReorder = findViewById(R.id.btnReorder);
         btnReorder.setOnClickListener(v -> toggleReorder());
@@ -1072,11 +1072,23 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
     }
 
+    /** Home while it is on screen, so the Settings panel can light up the gear behind it. */
+    private static java.lang.ref.WeakReference<MainActivity> onScreen = new java.lang.ref.WeakReference<>(null);
+
+    /** QuickSettingsActivity opened over Home: focus the gear, as the Input button focuses the Inputs pill. */
+    static void focusSettingsPill() {
+        MainActivity home = onScreen.get();
+        if (home == null || !home.started || home.isFinishing()) return;
+        View gear = home.findViewById(R.id.btnSettings);
+        if (gear != null && gear.getVisibility() == View.VISIBLE) gear.requestFocus();
+    }
+
     @Override
     protected void onStart() {
         super.onStart();
         stopped = false;
         started = true;
+        onScreen = new java.lang.ref.WeakReference<>(this);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(timeReceiver, timeFilter, Context.RECEIVER_NOT_EXPORTED);
         } else {
@@ -1336,6 +1348,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onStop() {
         super.onStop();
         started = false;
+        if (onScreen.get() == this) onScreen.clear();
         unregisterReceiver(timeReceiver);
         clockRefresh.stop();
         handler.removeCallbacks(clockCheck);
@@ -3683,6 +3696,141 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         });
         rows.addView(row);
         return row;
+    }
+
+    // ---- gear and Wi-Fi dropdowns (local change) ----------------------------------------------------
+
+    /** The gear's dropdown: the Settings-button panel's rows, hanging under the gear like the Inputs list. */
+    private void showQuickSettingsMenu() {
+        View anchor = findViewById(R.id.btnSettings);
+        View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
+        LinearLayout rows = panel.findViewById(R.id.rows);
+        PopupWindow popup = glassPopup(panel, (int) (220 * density));
+        addInputRow(rows, popup, R.drawable.ic_settings, getString(R.string.tv_settings), -1,
+                () -> open(systemIntent(Settings.ACTION_SETTINGS)));
+        addInputRow(rows, popup, R.drawable.ic_picture, getString(R.string.quick_picture), -1,
+                () -> open(SystemSettings.displayIntent(this)));
+        addInputRow(rows, popup, R.drawable.ic_wifi, getString(R.string.quick_network), -1,
+                () -> open(systemIntent(Settings.ACTION_WIFI_SETTINGS)));
+        View apps = addInputRow(rows, popup, R.drawable.ic_apps, getString(R.string.quick_apps), -1,
+                () -> open(systemIntent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS)));
+        showRowStatus(apps, getString(R.string.quick_apps_hint));
+        addInputRow(rows, popup, R.drawable.ic_home_settings, getString(R.string.launcher_settings), -1,
+                () -> startActivityForResult(new Intent(this, LauncherSettingsActivity.class), LAUNCHER_SETTINGS_REQUEST));
+        showDropdown(popup, panel, rows, anchor, (int) (220 * density));
+    }
+
+    /** The Wi-Fi pill's dropdown: the network and its private DNS, then More Settings for the full Wi-Fi page. */
+    private void showNetworkMenu() {
+        View anchor = btnWifi;
+        View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
+        LinearLayout rows = panel.findViewById(R.id.rows);
+        PopupWindow popup = glassPopup(panel, (int) (220 * density));
+        NetworkSummary net = networkSummary();
+        View link = addInputRow(rows, popup, net.ethernet ? R.drawable.ic_ethernet : R.drawable.ic_wifi, net.name, -1,
+                () -> open(systemIntent(Settings.ACTION_WIFI_SETTINGS)));
+        showRowStatus(link, getString(net.online ? R.string.connected : R.string.offline));
+        if (net.online) link.findViewById(R.id.dot).setVisibility(View.VISIBLE);
+        if (net.online) {
+            View dns = addInputRow(rows, popup, R.drawable.ic_lock, getString(R.string.private_dns), -1,
+                    () -> open(systemIntent(Settings.ACTION_WIFI_SETTINGS)));
+            showRowStatus(dns, net.privateDns != null ? net.privateDns : getString(R.string.private_dns_off));
+            addSpeedTestRow(rows, popup);
+        }
+        addSeparator(rows);
+        addInputRow(rows, popup, R.drawable.ic_settings, getString(R.string.more_settings), -1, this::openNetworkPill);
+        showDropdown(popup, panel, rows, anchor, Math.max(anchor.getWidth(), (int) (220 * density)));
+    }
+
+    /** The last speed test's result, shown again the next time the dropdown opens; null before the first test. */
+    private static String lastSpeed;
+
+    /** Speed test row: OK runs the test in place (the dropdown stays open) and shows down / up Mbps. */
+    private void addSpeedTestRow(LinearLayout rows, PopupWindow popup) {
+        View row = addInputRow(rows, popup, R.drawable.ic_swap_vert, getString(R.string.speed_test), -1, () -> { });
+        showRowStatus(row, lastSpeed != null ? lastSpeed : getString(R.string.speed_test_hint));
+        TextView status = row.findViewById(R.id.status);
+        row.setOnClickListener(v -> {
+            final double[] downSoFar = {-1};
+            boolean started = SpeedTest.start(new SpeedTest.Listener() {
+                @Override
+                public void onProgress(boolean down, double mbps) {
+                    if (down) downSoFar[0] = mbps;
+                    if (!popup.isShowing()) return;
+                    status.setText(down ? getString(R.string.speed_test_live_down, formatMbps(mbps))
+                            : getString(R.string.speed_test_live_up, formatMbps(downSoFar[0]), formatMbps(mbps)));
+                }
+
+                @Override
+                public void onDone(double down, double up) {
+                    String result = down < 0 && up < 0 ? getString(R.string.speed_test_failed)
+                            : getString(R.string.speed_test_result, formatMbps(down), formatMbps(up));
+                    if (down >= 0 || up >= 0) lastSpeed = result;
+                    if (popup.isShowing()) status.setText(result);
+                }
+            }, () -> !popup.isShowing());
+            if (started) status.setText(R.string.speed_test_starting);
+        });
+    }
+
+    private static String formatMbps(double mbps) {
+        if (mbps < 0) return "–";
+        return mbps >= 100 ? String.valueOf(Math.round(mbps)) : String.format(java.util.Locale.US, "%.1f", mbps);
+    }
+
+    private static void showRowStatus(View row, String text) {
+        TextView status = row.findViewById(R.id.status);
+        status.setText(text);
+        status.setVisibility(View.VISIBLE);
+    }
+
+    /** Size to the widest row, drop in under the anchor growing inward from the bar's edge, focus the first row. */
+    private void showDropdown(PopupWindow popup, View panel, LinearLayout rows, View anchor, int minWidth) {
+        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        popup.setWidth(Math.max(minWidth, Math.min(panel.getMeasuredWidth(), (int) (360 * density))));
+        dropIn(popup, panel, anchor, getResources().getBoolean(R.bool.rtl_menu_bar) ? Gravity.START : Gravity.END);
+        rows.getChildAt(0).requestFocus();
+    }
+
+    /** What the Wi-Fi dropdown shows: the link's name, whether it is up, and the private DNS host in use. */
+    private static final class NetworkSummary {
+        String name;
+        boolean online, ethernet;
+        String privateDns;
+    }
+
+    private NetworkSummary networkSummary() {
+        NetworkSummary out = new NetworkSummary();
+        out.name = getString(R.string.wifi);
+        try {
+            ConnectivityManager cm = getApplicationContext().getSystemService(ConnectivityManager.class);
+            for (Network net : cm != null ? cm.getAllNetworks() : new Network[0]) {
+                NetworkCapabilities caps = cm.getNetworkCapabilities(net);
+                if (caps == null || caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue;
+                if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue;
+                out.online = true;
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+                    out.ethernet = true;
+                    out.name = getString(R.string.ethernet);
+                } else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                    WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                    WifiInfo info = wm != null ? wm.getConnectionInfo() : null;
+                    String ssid = info != null && info.getSSID() != null ? info.getSSID().replace("\"", "").trim() : "";
+                    if (!ssid.isEmpty() && !ssid.contains("unknown") && !ssid.equals("0x")) out.name = ssid;
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    android.net.LinkProperties props = cm.getLinkProperties(net);
+                    if (props != null && props.isPrivateDnsActive()) {
+                        String host = props.getPrivateDnsServerName();
+                        out.privateDns = host != null && !host.isEmpty() ? host : getString(R.string.private_dns_auto);
+                    }
+                }
+                break;
+            }
+        } catch (Exception e) {
+            android.util.Log.w("TvHome", "network summary unavailable", e);
+        }
+        return out;
     }
 
     // ---- launcher settings and module cards -------------------------------------------------------

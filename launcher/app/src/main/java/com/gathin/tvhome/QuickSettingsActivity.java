@@ -49,6 +49,7 @@ public final class QuickSettingsActivity extends Activity {
         addRow(rows, R.drawable.ic_home_settings, R.string.launcher_settings, 0,
                 new Intent(this, MainActivity.class).setAction(MainActivity.ACTION_LAUNCHER_SETTINGS));
         rows.getChildAt(0).requestFocus();
+        MainActivity.focusSettingsPill();   // Home behind: light up its gear
     }
 
     /** Settings pressed again while the panel is up. */
