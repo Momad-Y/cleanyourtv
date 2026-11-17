@@ -169,4 +169,7 @@
     <string name="clock_format_system">System</string>
     <string name="clock_format_12">12-hour</string>
     <string name="clock_format_24">24-hour</string>
+    <!-- Local change: game_day_compact line under the date. -->
+    <string name="next_line">%1$s %2$s · in %3$s</string>
+    <string name="next_line_live">%1$s %2$s · now</string>
 </resources>

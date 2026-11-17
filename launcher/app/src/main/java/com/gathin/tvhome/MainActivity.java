@@ -204,6 +204,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private GameDay gameDay;
     /** Local change: clock_line, the add-on line under the date. */
     private ClockLine clockLine;
+    /** Local change: game_day_compact, the next event as a line under the date. */
+    private boolean gameDayCompact;
     private View raceBar;
     private LinearLayout racePager;
     private long rotationStart;
@@ -589,6 +591,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         gameDay = GameDay.create(this, cfg.gameDay, handler, this::updatePanel);
         if (clockLine != null) clockLine.shutdown();
         clockLine = ClockLine.create(this, cfg.clockLine, handler, this::updateClockLine);
+        gameDayCompact = cfg.gameDayCompact;
         if (clockLine == null) updateClockLine();
         // The rotation runs on the clock that never jumps: setting the TV's time must not stall or stretch a turn.
         rotationStart = SystemClock.elapsedRealtime();
@@ -2823,6 +2826,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             updateRace();
             return;
         }
+        if (gameDayCompact) {
+            updateCompactPanel();
+            return;
+        }
         handler.removeCallbacks(turnTick);
         long now = System.currentTimeMillis();
         List<GameDay.Turn> games = gameDay.turns();
@@ -2876,7 +2883,55 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (line == null) return;
         String text = clockLine == null ? "" : clockLine.text();
         line.setText(text);
+        setLineIcon(line, clockLine == null ? 0 : lineIcon(clockLine.icon()));
         line.setVisibility(text.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    private static int lineIcon(String kind) {
+        switch (kind) {
+            case "sun": return R.drawable.ic_line_sun;
+            case "moon": return R.drawable.ic_line_moon;
+            case "cloud": case "fog": return R.drawable.ic_line_cloud;
+            case "rain": case "storm": return R.drawable.ic_line_rain;
+            case "snow": return R.drawable.ic_line_snow;
+            default: return 0;
+        }
+    }
+
+    /** A small icon before a header line, in the line's own colour. */
+    private void setLineIcon(TextView line, int icon) {
+        line.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0);
+        line.setCompoundDrawablePadding((int) (8 * density));
+        line.setCompoundDrawableTintList(line.getTextColors());
+    }
+
+    /** game_day_compact: the soonest turn as "Maghrib 5:32 PM · in 43 min" under the date; the panel stays hidden. */
+    private void updateCompactPanel() {
+        racePanel.setVisibility(View.GONE);
+        TextView line = findViewById(R.id.nextLine);
+        if (line == null) return;
+        long now = System.currentTimeMillis();
+        GameDay.Turn next = null;
+        for (GameDay.Turn t : gameDay.turns()) {
+            if (t.endMs <= now) {
+                if (now - lastEndedRead > MINUTE_MS) {
+                    lastEndedRead = now;
+                    gameDay.read();
+                }
+                continue;
+            }
+            if (next == null || t.startMs < next.startMs) next = t;
+        }
+        if (next == null) {
+            line.setVisibility(View.GONE);
+            return;
+        }
+        String name = next.word.isEmpty() ? next.topLine : next.word;
+        String at = android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(next.startMs));
+        line.setText(GameDay.live(next, now) ? getString(R.string.next_line_live, name, at)
+                : getString(R.string.next_line, name, at, RaceWeekend.countdown(getResources(), GameDay.until(next, now))));
+        setLineIcon(line, R.drawable.ic_line_moon);
+        line.setVisibility(View.VISIBLE);
     }
 
     /** One dot per turn, the one on screen bright; none for a single turn. */

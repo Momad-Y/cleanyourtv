@@ -158,6 +158,8 @@ final class Config {
     final String gameDay;
     /** Local change. clock_line: the package of an add-on whose line goes under the date (ClockLine); empty = off. */
     String clockLine = "";
+    /** Local change. game_day_compact: the game_day turn as one line under the date instead of the panel. */
+    boolean gameDayCompact;
     /** App library pill after the last Home row (config.xml app_library). */
     final boolean appLibrary;
     /** OK directly toggles Home membership in the library (app_library_selection). */
@@ -736,6 +738,7 @@ final class Config {
                 settingsKeyClearTask);
         built.clockLine = json == null ? res.getString(R.string.clock_line).trim()
                 : string(json, "clock_line", res.getString(R.string.clock_line).trim());
+        built.gameDayCompact = json != null && json.optBoolean("game_day_compact", false);
         return built;
     }
 

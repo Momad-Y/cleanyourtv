@@ -24,7 +24,7 @@ import java.util.concurrent.RejectedExecutionException;
 final class ClockLine {
     static final String META = "com.gathin.tvhome.clockline";
     private static final String TAG = "TvHome";
-    private static final String[] COLUMNS = {"text"};
+    private static final String[] COLUMNS = {"text", "icon"};
 
     private final Context ctx;
     private final Uri uri;
@@ -34,6 +34,7 @@ final class ClockLine {
     private final ContentObserver observer;
     private boolean watching;
     private String text = "";
+    private String icon = "";
 
     private ClockLine(Context ctx, Uri uri, Handler main, Runnable onChange) {
         this.ctx = ctx;
@@ -96,21 +97,33 @@ final class ClockLine {
         try {
             io.execute(() -> {
                 String line = "";
+                String kind = "";
                 try (Cursor c = ctx.getContentResolver().query(uri, COLUMNS, null, null, null)) {
-                    if (c != null && c.moveToFirst() && !c.isNull(0)) line = c.getString(0).trim();
+                    if (c != null && c.moveToFirst() && !c.isNull(0)) {
+                        line = c.getString(0).trim();
+                        int at = c.getColumnIndex("icon");
+                        if (at >= 0 && !c.isNull(at)) kind = c.getString(at).trim();
+                    }
                 } catch (RuntimeException gone) {
                     Log.w(TAG, "clock_line query failed", gone);
                     return;   // keep what is on screen
                 }
                 final String result = line;
+                final String resultIcon = kind;
                 main.post(() -> {
                     text = result;
+                    icon = resultIcon;
                     onChange.run();
                 });
             });
         } catch (RejectedExecutionException shutDown) {
             // Home is being destroyed.
         }
+    }
+
+    /** The add-on's icon word (sun, moon, cloud, fog, rain, storm, snow), or "" for none. */
+    String icon() {
+        return icon;
     }
 
     /** The line to show, or "" for none. */

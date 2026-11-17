@@ -236,11 +236,12 @@
                     <View
                         android:id="@+id/clockDivider"
                         android:layout_width="1dp"
-                        android:layout_height="26dp"
+                        android:layout_height="match_parent"
                         android:layout_gravity="bottom"
                         android:layout_marginStart="16dp"
                         android:layout_marginEnd="16dp"
-                        android:layout_marginBottom="8dp"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="10dp"
                         android:background="#33FFFFFF" />
 
                     <LinearLayout
@@ -302,6 +303,22 @@
                         <!-- Local change: clock_line, an add-on's short line (today's weather) under the date. -->
                         <TextView
                             android:id="@+id/clockLine"
+                            android:gravity="left"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:singleLine="true"
+                            android:ellipsize="end"
+                            android:textColor="#D9FFFFFF"
+                            android:textSize="14sp"
+                            android:fontFamily="@string/font_medium"
+                            android:letterSpacing="0.14"
+                            android:textAllCaps="true"
+                            android:visibility="gone" />
+
+                        <!-- Local change: game_day_compact, the next event (prayer) under the weather line. -->
+                        <TextView
+                            android:id="@+id/nextLine"
                             android:gravity="left"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"

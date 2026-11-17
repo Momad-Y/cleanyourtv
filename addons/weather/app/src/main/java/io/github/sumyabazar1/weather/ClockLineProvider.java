@@ -32,7 +32,7 @@ public final class ClockLineProvider extends ContentProvider {
     private static final String CACHE = "clock_line";
     private static final long STALE_MS = 6 * 60 * 60_000L;
     private static final int TIMEOUT_MS = 8_000;
-    private static final String[] COLUMNS = {"text"};
+    private static final String[] COLUMNS = {"text", "icon"};
     private static final AtomicBoolean FETCHING = new AtomicBoolean();
 
     @Override
@@ -54,12 +54,12 @@ public final class ClockLineProvider extends ContentProvider {
         boolean samePlace = placeKey.equals(cache.getString("place", ""));
         long readAt = samePlace ? cache.getLong("at", 0) : 0;
         long triedAt = samePlace ? cache.getLong("tried", 0) : 0;
-        boolean due = now - readAt > Forecast.REFRESH_MS && now - triedAt > Forecast.RETRY_MS;
+        boolean due = (now - readAt > Forecast.REFRESH_MS || !cache.contains("icon")) && now - triedAt > Forecast.RETRY_MS;
         if (due) refresh(ctx, uri, placeKey,
                 Double.longBitsToDouble(place.getLong("lat", 0)), Double.longBitsToDouble(place.getLong("lon", 0)));
 
         String text = cache.getString("text", null);
-        if (samePlace && text != null && now - readAt < STALE_MS) out.addRow(new Object[] {text});
+        if (samePlace && text != null && now - readAt < STALE_MS) out.addRow(new Object[] {text, cache.getString("icon", "")});
         out.setNotificationUri(ctx.getContentResolver(), uri);
         return out;
     }
@@ -72,8 +72,8 @@ public final class ClockLineProvider extends ContentProvider {
         cache.edit().putString("place", placeKey).putLong("tried", System.currentTimeMillis()).apply();
         new Thread(() -> {
             try {
-                String line = todayLine(app, lat, lon);
-                cache.edit().putString("place", placeKey).putString("text", line)
+                String[] line = todayLine(app, lat, lon);
+                cache.edit().putString("place", placeKey).putString("text", line[0]).putString("icon", line[1])
                         .putLong("at", System.currentTimeMillis()).apply();
                 app.getContentResolver().notifyChange(uri, null);
             } catch (IOException | JSONException | RuntimeException e) {
@@ -84,8 +84,8 @@ public final class ClockLineProvider extends ContentProvider {
         }, "weather-line").start();
     }
 
-    /** "27° Sunny · H 31° L 24°", in the unit chosen in the app's settings. */
-    static String todayLine(Context ctx, double lat, double lon) throws IOException, JSONException {
+    /** {"27° Sunny · H31° L24°", "sun"}: the line, in the unit chosen in the app's settings, and its icon word. */
+    static String[] todayLine(Context ctx, double lat, double lon) throws IOException, JSONException {
         String where = String.format(Locale.ROOT, "latitude=%.4f&longitude=%.4f", lat, lon);
         JSONObject reply = get("https://api.open-meteo.com/v1/forecast?" + where + "&models=icon_seamless"
                 + "&current=temperature_2m,relative_humidity_2m,weather_code,is_day"
@@ -99,8 +99,19 @@ public final class ClockLineProvider extends ContentProvider {
                 "f".equalsIgnoreCase(ctx.getString(R.string.temperature_unit).trim()));
         double high = daily.getJSONArray("temperature_2m_max").getDouble(0);
         double low = daily.getJSONArray("temperature_2m_min").getDouble(0);
-        return Forecast.degrees(temp, f) + "° " + ctx.getString(Forecast.sky(code, day))
-                + " · H " + Forecast.degrees(high, f) + "° L " + Forecast.degrees(low, f) + "°";
+        String text = Forecast.degrees(temp, f) + "° " + ctx.getString(Forecast.sky(code, day))
+                + " · H" + Forecast.degrees(high, f) + "° L" + Forecast.degrees(low, f) + "°";
+        return new String[] {text, icon(code, day)};
+    }
+
+    /** The launcher's icon word for a WMO code: sun, moon, cloud, fog, rain, storm or snow. */
+    static String icon(int code, boolean day) {
+        if (code <= 1) return day ? "sun" : "moon";
+        if (code <= 3) return "cloud";
+        if (code == 45 || code == 48) return "fog";
+        if ((code >= 71 && code <= 77) || code == 85 || code == 86) return "snow";
+        if (code >= 95) return "storm";
+        return "rain";
     }
 
     private static JSONObject get(String url) throws IOException, JSONException {
