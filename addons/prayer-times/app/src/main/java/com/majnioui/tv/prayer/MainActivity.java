@@ -153,11 +153,10 @@ public class MainActivity extends Activity {
                 try {
                     parse(result.getJSONObject("data"));
                     loadedFor = day;
-                    if (getResources().getBoolean(R.bool.reminders)) {
-                        PrayerScheduler.saveTimingsAndSchedule(MainActivity.this, day, NAMES, times, minutes, getString(R.string.place));
-                    } else {
-                        PrayerScheduler.cancel(MainActivity.this);
-                    }
+                    // Local change: always keep today's times, so the launcher's next-prayer line has them;
+                    // saveTimingsAndSchedule still cancels the alarms when reminders are off.
+                    PrayerScheduler.saveTimingsAndSchedule(MainActivity.this, day, NAMES, times, minutes, getString(R.string.place));
+                    NextPrayerProvider.changed(MainActivity.this);
                     render();
                 } catch (Exception e) {
                     Log.w(TAG, "parse: " + e);

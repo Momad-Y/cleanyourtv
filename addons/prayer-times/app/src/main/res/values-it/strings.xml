@@ -19,4 +19,5 @@
     <string name="loading">Caricamento…</string>
     <string name="offline">Impossibile raggiungere Aladhan. Mostro gli ultimi orari, se ci sono.</string>
     <string name="unexpected_error">Risposta inattesa da Aladhan.</string>
+    <string name="next_prayer_line">Prossima preghiera · %1$s · %2$s</string>
 </resources>

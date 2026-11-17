@@ -16,6 +16,13 @@
         android:banner="@drawable/banner"
         android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
         android:allowBackup="false">
+        <!-- Local change: the next prayer for the Clean Your TV launcher's panel under the clock (game_day). -->
+        <meta-data android:name="com.gathin.tvhome.games" android:value="com.majnioui.tv.prayer.turns" />
+        <provider
+            android:name=".NextPrayerProvider"
+            android:authorities="com.majnioui.tv.prayer.turns"
+            android:exported="true" />
+
 
         <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="landscape">
             <intent-filter>

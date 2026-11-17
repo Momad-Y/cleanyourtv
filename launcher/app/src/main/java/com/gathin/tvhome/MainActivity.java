@@ -202,6 +202,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private TextView raceKicker, raceHeadline, raceSessions;
     /** game_day: each team's next game from an add-on, rotating in the race panel; null when the key is off. */
     private GameDay gameDay;
+    /** Local change: clock_line, the add-on line under the date. */
+    private ClockLine clockLine;
     private View raceBar;
     private LinearLayout racePager;
     private long rotationStart;
@@ -585,6 +587,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         raceBar = findViewById(R.id.raceBar);
         racePager = findViewById(R.id.racePager);
         gameDay = GameDay.create(this, cfg.gameDay, handler, this::updatePanel);
+        if (clockLine != null) clockLine.shutdown();
+        clockLine = ClockLine.create(this, cfg.clockLine, handler, this::updateClockLine);
+        if (clockLine == null) updateClockLine();
         // The rotation runs on the clock that never jumps: setting the TV's time must not stall or stretch a turn.
         rotationStart = SystemClock.elapsedRealtime();
         showStats = cfg.showStats;
@@ -1150,6 +1155,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         if (showStats) startStats();
         if (gameDay != null) gameDay.start();
+        if (clockLine != null) clockLine.start();
         sky.update();
         wallpaperPlayer.start();
         handler.postDelayed(minuteTick, MINUTE_MS);
@@ -1335,6 +1341,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         startPending = null;   // leaving Home before the network came back: the boot's app stays closed
         stopStats();
         if (gameDay != null) gameDay.stop();
+        if (clockLine != null) clockLine.stop();
         handler.removeCallbacks(turnTick);
         if (lamp != null) lamp.stop();
         cancelPendingFocusScroll();
@@ -1404,6 +1411,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         RemoteKeys.release(this);
         cancelHoldOk();
         if (gameDay != null) gameDay.shutdown();
+        if (clockLine != null) clockLine.shutdown();
         unregisterReceiver(packageReceiver);
         if (openOnStartOnWake) unregisterReceiver(wakeReceiver);
         wallpaperPlayer.close();
@@ -2860,6 +2868,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         showPager(turns.size(), on);
         if (turns.size() > 1 && !stopped) handler.postDelayed(turnTick, GameDay.delayToNextTurn(since, seconds));
+    }
+
+    /** clock_line: show the add-on's line under the date, or hide the row when there is none. */
+    private void updateClockLine() {
+        TextView line = findViewById(R.id.clockLine);
+        if (line == null) return;
+        String text = clockLine == null ? "" : clockLine.text();
+        line.setText(text);
+        line.setVisibility(text.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     /** One dot per turn, the one on screen bright; none for a single turn. */

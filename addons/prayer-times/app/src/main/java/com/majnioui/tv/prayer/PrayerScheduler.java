@@ -222,7 +222,11 @@ public class PrayerScheduler {
             cancel(ctx);
             return;
         }
+        fetchTimings(ctx, null);
+    }
 
+    /** Local change: fetch and keep today's times whether or not reminders are on; then run onSaved, if any. */
+    public static void fetchTimings(Context ctx, Runnable onSaved) {
         new Thread(() -> {
             try {
                 Context appContext = ctx.getApplicationContext();
@@ -261,6 +265,7 @@ public class PrayerScheduler {
 
                 saveTimingsAndSchedule(appContext, day, NAMES, times, minutes, appContext.getString(R.string.place));
                 Log.i(TAG, "Background fetch and schedule successful for " + day);
+                if (onSaved != null) onSaved.run();
             } catch (Exception e) {
                 Log.w(TAG, "Background fetch error: " + e);
             }
