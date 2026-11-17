@@ -605,6 +605,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (lunar) lunarDate.setVisibility(View.VISIBLE);
         greetingName = cfg.greetingName;
         if (cfg.dateBelowClock) moveDateBelowClock();
+        else if (cfg.headerWidgetsBeside) arrangeHeaderBeside();
+        if (cfg.headerOffsetDp > 0) offsetHeader(cfg.headerOffsetDp);
         if (cfg.dateBelowClock && cfg.iconOnlyButtons && !cfg.topMenu
                 && !getResources().getBoolean(R.bool.rtl_menu_bar)) {
             alignDateBelowIconsWithClock();
@@ -2548,6 +2550,77 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             textLp.gravity = ((TextView) text).getGravity() & Gravity.HORIZONTAL_GRAVITY_MASK;
             text.setLayoutParams(textLp);
         }
+    }
+
+    /**
+     * Local change, header_widgets_beside: the time with the date under it on the left, then the divider and the
+     * header lines (weather, next prayer) beside them, both centred on each other.
+     */
+    private void arrangeHeaderBeside() {
+        View clock = findViewById(R.id.clock);
+        View ampm = findViewById(R.id.ampm);
+        View date = findViewById(R.id.date);
+        LinearLayout clockRow = (LinearLayout) clock.getParent();
+        ViewGroup lines = (ViewGroup) date.getParent();
+
+        LinearLayout timeRow = new LinearLayout(this);
+        timeRow.setOrientation(LinearLayout.HORIZONTAL);
+        timeRow.setBaselineAligned(true);
+        clockRow.removeView(clock);
+        clockRow.removeView(ampm);
+        timeRow.addView(clock);
+        timeRow.addView(ampm);
+
+        LinearLayout left = new LinearLayout(this);
+        left.setOrientation(LinearLayout.VERTICAL);
+        left.addView(timeRow);
+        lines.removeView(date);
+        LinearLayout.LayoutParams dateLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dateLp.topMargin = Math.round(6 * density);
+        left.addView(date, dateLp);
+        LinearLayout.LayoutParams leftLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        leftLp.gravity = Gravity.CENTER_VERTICAL;
+        clockRow.addView(left, 0, leftLp);
+
+        clockRow.setBaselineAligned(false);
+        clockRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams dividerLp = (LinearLayout.LayoutParams) findViewById(R.id.clockDivider).getLayoutParams();
+        dividerLp.gravity = Gravity.CENTER_VERTICAL;
+        // As tall as the time and the date together, a little short at both ends.
+        dividerLp.height = ViewGroup.LayoutParams.MATCH_PARENT;
+        dividerLp.topMargin = Math.round(10 * density);
+        dividerLp.bottomMargin = Math.round(6 * density);
+        dividerLp.setMarginStart(Math.round(28 * density));
+        dividerLp.setMarginEnd(Math.round(24 * density));
+        LinearLayout.LayoutParams linesLp = (LinearLayout.LayoutParams) ((View) lines).getLayoutParams();
+        linesLp.gravity = Gravity.CENTER_VERTICAL;
+        linesLp.bottomMargin = 0;
+        // The first header line has no gap above it now that the date has left the column.
+        for (int i = 0; i < lines.getChildCount(); i++) {
+            View child = lines.getChildAt(i);
+            if (child.getId() == R.id.clockLine) {
+                ((LinearLayout.LayoutParams) child.getLayoutParams()).topMargin = 0;
+                break;
+            }
+        }
+        // The icons line up with the top of the block (the greeting), not with the date at its bottom.
+        LinearLayout buttons = findViewById(R.id.topButtons);
+        RelativeLayout.LayoutParams buttonsLp = (RelativeLayout.LayoutParams) buttons.getLayoutParams();
+        buttonsLp.removeRule(RelativeLayout.ALIGN_BOTTOM);
+        buttonsLp.addRule(RelativeLayout.ALIGN_TOP, R.id.leftBlock);
+        buttonsLp.bottomMargin = 0;
+        buttons.setLayoutParams(buttonsLp);
+        clockRow.requestLayout();
+    }
+
+    /** Local change, header_offset_dp: the clock block and the icons beside it sit lower on the screen. */
+    private void offsetHeader(int dp) {
+        View header = (View) findViewById(R.id.leftBlock).getParent();
+        ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) header.getLayoutParams();
+        lp.topMargin += Math.round(dp * density);
+        header.setLayoutParams(lp);
     }
 
     /** Centre the one-row header when the greeting and extra date lines are absent (#2265). */

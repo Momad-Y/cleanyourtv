@@ -160,6 +160,9 @@ final class Config {
     String clockLine = "";
     /** Local change. game_day_compact: the game_day turn as one line under the date instead of the panel. */
     boolean gameDayCompact;
+    /** Local change. header_widgets_beside: date under the time, header lines beside them; header_offset_dp moves the block down. */
+    boolean headerWidgetsBeside;
+    int headerOffsetDp;
     /** App library pill after the last Home row (config.xml app_library). */
     final boolean appLibrary;
     /** OK directly toggles Home membership in the library (app_library_selection). */
@@ -739,6 +742,8 @@ final class Config {
         built.clockLine = json == null ? res.getString(R.string.clock_line).trim()
                 : string(json, "clock_line", res.getString(R.string.clock_line).trim());
         built.gameDayCompact = json != null && json.optBoolean("game_day_compact", false);
+        built.headerWidgetsBeside = json != null && json.optBoolean("header_widgets_beside", false);
+        built.headerOffsetDp = json == null ? 0 : Math.max(0, Math.min(120, json.optInt("header_offset_dp", 0)));
         return built;
     }
 
